@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>UCD Course Prerequisite Network</title>
+    <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+</head>
+<body>
+
+<h2>UCD Course Prerequisite Network</h2>
+
+<input id="course" placeholder="Enter course ID (e.g. EAE126)">
+<button onclick="loadCourse()">Load</button>
+
+<div id="cy" style="width: 100%; height: 600px; border: 1px solid #ccc;"></div>
+
+<script>
+async function loadCourse() {
+    const id = document.getElementById("course").value;
+    const url = `https://你的后端地址/subgraph/${id}`;
+    const data = await fetch(url).then(res => res.json());
+
+    let elements = [];
+
+    data.nodes.forEach(n => {
+        elements.push({
+            data: { id: n.id, label: n.id }
+        });
+    });
+
+    data.links.forEach(e => {
+        elements.push({
+            data: { source: e.source, target: e.target }
+        });
+    });
+
+    cytoscape({
+        container: document.getElementById('cy'),
+        elements,
+        layout: { name: 'breadthfirst', directed: true }
+    });
+}
+</script>
+
+</body>
+</html>
+
