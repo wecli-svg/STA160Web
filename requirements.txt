@@ -1,6 +1,6 @@
-plotly
-numpy
-fastapi
-uvicorn
+flask
+flask-cors
 pandas
 networkx
+plotly
+gunicorn
