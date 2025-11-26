@@ -1,5 +1,6 @@
-streamlit
-pandas
-networkx
 plotly
 numpy
+fastapi
+uvicorn
+pandas
+networkx
