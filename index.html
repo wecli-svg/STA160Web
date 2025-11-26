@@ -1,92 +1,84 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>UCD Course Prerequisite Network</title>
-    <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+    <title>UCD Course Visualizer</title>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #search-container { margin-bottom: 20px; text-align: center; }
+        #course-input { padding: 10px; width: 200px; font-size: 16px; }
+        #search-btn { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        #chart-div { width: 100%; height: 800px; border: 1px solid #ddd; }
+        #loading { display: none; color: #666; text-align: center; }
+    </style>
 </head>
 <body>
 
-<h2>UCD Course Prerequisite Network</h2>
+    <div id="search-container">
+        <h2>UCD Prerequisite Tree</h2>
+        <input type="text" id="course-input" placeholder="Enter Course ID (e.g. EAE126)" value="EAE126">
+        <button id="search-btn" onclick="loadGraph()">Search</button>
+        <p id="loading">Loading...</p>
+    </div>
 
-<input id="course" placeholder="Enter course ID (e.g. EAE126)">
-<button onclick="loadCourse()">Load</button>
+    <div id="chart-div"></div>
 
-<div id="cy" style="width: 100%; height: 600px; border: 1px solid #ccc;"></div>
+    <script>
+        // ⚠️ 替换成你 Render 部署后的真实 URL
+        const API_BASE_URL = "https://sta160web.onrender.com/api/graph";
 
-<script>
-let cyInstance = null;
-
-async function loadCourse() {
-    const id = document.getElementById("course").value.trim();
-    if (!id) return alert("请输入课程ID");
-
-    // 改成你 Render 后端的 API
-    const url = `https://sta160web.onrender.com/graph/${id}`;
-
-    let data;
-    try {
-        data = await fetch(url).then(res => res.json());
-    } catch (err) {
-        return alert("无法获取数据，请检查后端服务是否运行");
-    }
-
-    let elements = [];
-
-    data.nodes.forEach(n => {
-        elements.push({
-            data: { id: n.id, label: n.label }
-        });
-    });
-
-    data.links.forEach(e => {
-        elements.push({
-            data: { source: e.source, target: e.target }
-        });
-    });
-
-    if (cyInstance) {
-        cyInstance.destroy();
-    }
-
-    cyInstance = cytoscape({
-        container: document.getElementById('cy'),
-        elements,
-        layout: { name: 'breadthfirst', directed: true, spacingFactor: 1.5 },
-        style: [
-            {
-                selector: 'node',
-                style: {
-                    'label': 'data(label)',
-                    'text-valign': 'center',
-                    'color': '#000',
-                    'background-color': '#4dabf7',
-                    'width': 30,
-                    'height': 30,
-                    'font-size': 12,
-                }
-            },
-            {
-                selector: 'edge',
-                style: {
-                    'width': 2,
-                    'line-color': '#ccc',
-                    'target-arrow-color': '#ccc',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier'
-                }
+        async function loadGraph(courseId = null) {
+            // 获取输入框的值
+            if (!courseId) {
+                courseId = document.getElementById('course-input').value;
             }
-        ]
-    });
+            
+            // 显示 Loading
+            document.getElementById('loading').style.display = 'block';
 
-    // 点击节点可以重新加载该节点的子图
-    cyInstance.on('tap', 'node', function(evt){
-        const nodeId = evt.target.id();
-        document.getElementById("course").value = nodeId;
-        loadCourse();
-    });
-}
-</script>
+            try {
+                // 1. 请求后端 API
+                const response = await fetch(`${API_BASE_URL}/${courseId}`);
+                const data = await response.json();
 
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                // 2. 渲染 Plotly 图表
+                // data 就是后端返回的 fig.to_json() 的内容
+                Plotly.newPlot('chart-div', data.data, data.layout, {responsive: true});
+
+                // 3. 绑定点击事件 (实现交互)
+                const chartDiv = document.getElementById('chart-div');
+                
+                chartDiv.on('plotly_click', function(data){
+                    // 获取点击点的 customdata (我们在后端存的 Course ID)
+                    if (data.points.length > 0) {
+                        const clickedId = data.points[0].customdata;
+                        console.log("Clicked:", clickedId);
+                        
+                        // 更新输入框
+                        document.getElementById('course-input').value = clickedId;
+                        
+                        // 重新加载图表 (递归交互)
+                        loadGraph(clickedId);
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Failed to load graph. Is the backend running?");
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // 页面加载时默认查一门课
+        window.onload = function() {
+            loadGraph('EAE126');
+        }
+    </script>
 </body>
 </html>
