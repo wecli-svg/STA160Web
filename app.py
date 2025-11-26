@@ -225,10 +225,19 @@ def create_plotly_json(graph_obj, plot_title, highlight_node_id):
         )
     )
 
+# ... (前面的代码保持不变)
+
     fig = go.Figure(data=[edge_trace, node_trace],
                  layout=go.Layout(
-                    title=f'<br>Prerequisite Tree: {highlight_node_id}',
-                    titlefont_size=16,
+                    # 🔴 修改点 1: title 变成字典结构，不再使用 titlefont_size
+                    title={
+                        'text': f'<br>Prerequisite Tree: {highlight_node_id}',
+                        'y': 0.95,
+                        'x': 0.5,
+                        'xanchor': 'center',
+                        'yanchor': 'top',
+                        'font': {'size': 16} # 字体大小放在这里
+                    },
                     showlegend=False,
                     hovermode='closest',
                     margin=dict(b=20,l=5,r=5,t=40),
