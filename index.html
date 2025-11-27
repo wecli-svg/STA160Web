@@ -116,7 +116,9 @@
                     
                     // 绑定点击事件 (递归搜索)
                     const chartDiv = document.getElementById('chart-div');
-                    chartDiv.removeAllListeners('plotly_click'); // 防止重复绑定
+                    
+                    // 🔥 【已删除】 chartDiv.removeAllListeners('plotly_click'); 
+                    
                     chartDiv.on('plotly_click', function(eventData){
                         if (eventData.points.length > 0) {
                             const clickedId = eventData.points[0].customdata;
@@ -173,5 +175,6 @@
     </script>
 </body>
 </html>
+
 
 
