@@ -15,35 +15,27 @@ import gc # 引入垃圾回收
 app = Flask(__name__)
 CORS(app)
 
-print("💡 初始化服务器 (内存优化版)...")
 
-# ==========================================
-# 1. 加载数据 (精简版)
-# ==========================================
 try:
-    # 只读取我们真正需要的列，减少内存占用
     cols_to_keep = ['Campus', 'Subject_Code', 'Course_Code', 'Title', 'Prerequisite(s)']
     df = pd.read_csv('combined_CLEAN.csv', usecols=lambda c: c in cols_to_keep or c == 'Course Description')
     df['Campus'] = df['Campus'].str.upper().str.strip()
     print(f"CSV 加载成功，共 {len(df)} 行")
 except Exception as e:
-    print(f"❌ CSV 加载失败: {e}")
+    print(f"CSV 加载失败: {e}")
     df = pd.DataFrame()
 
-# 2. 加载 Embeddings
 embeddings = None
 try:
     if os.path.exists('course_embeddings.pt'):
-        print("⏳ 正在加载 Embeddings...")
-        # 强制使用 CPU 加载，减少开销
+        print("loading Embeddings...")
         embeddings = torch.load('course_embeddings.pt', map_location=torch.device('cpu'))
-        print(f"✅ Embeddings 加载成功! Shape: {embeddings.shape}")
+        print(f"Loading Embeddings sucess! Shape: {embeddings.shape}")
     else:
-        print("⚠️ 找不到 embeddings 文件")
+        print("Not found embeddings 文件")
 except Exception as e:
-    print(f"❌ Embeddings 加载出错: {e}")
+    print(f"Embeddings loading error: {e}")
 
-# 3. 预处理 (保持不变)
 def normalize_course_id(text):
     if pd.isna(text): return ""
     return str(text).replace(" ", "").upper()
@@ -69,24 +61,18 @@ def parse_prerequisite(prereq_text):
 if not df.empty:
     df['Prereq_Struct'] = df['Prerequisite(s)'].apply(parse_prerequisite)
 
-# 手动清理内存
 gc.collect()
 
-# ==========================================
-# 4. 图构建 (✨ 改为懒加载模式)
-# ==========================================
-# 全局字典，但初始为空
+
 graphs = {}
 
 def get_campus_graph(campus_name):
-    """
-    懒加载：只有当被请求时，才构建该学校的图。
-    """
+
     # 如果已经构建过，直接返回
     if campus_name in graphs:
         return graphs[campus_name]
     
-    print(f"⚡ 首次请求 {campus_name}，正在构建图索引...")
+    print(f"首次请求 {campus_name}，正在构建图索引")
     campus_df = df[df['Campus'] == campus_name]
     
     if campus_df.empty:
@@ -112,14 +98,10 @@ def get_campus_graph(campus_name):
                         if src not in G: G.add_node(src, label=src, group='External')
                         G.add_edge(src, or_id)
     
-    # 存入缓存
     graphs[campus_name] = G
-    print(f"✅ {campus_name} 图构建完成。")
+    print(f"{campus_name} 图构建完成。")
     return G
 
-# ==========================================
-# 5. 布局算法 (保持不变)
-# ==========================================
 def get_optimized_tree_layout(graph, root_node):
     pos = {}
     try:
@@ -197,9 +179,7 @@ def create_plotly_json(G, title, highlight):
         print(f"绘图错误: {e}")
         return None
 
-# ==========================================
-# 6. API 路由
-# ==========================================
+
 @app.route('/')
 def home():
     return "API Optimized (Memory Safe) is Running!"
@@ -210,7 +190,6 @@ def search():
         campus = request.args.get('campus', 'UCD').upper()
         cid = normalize_course_id(request.args.get('course_id', ''))
         
-        # 1. 查找课程
         rows = df[(df['Campus'] == campus) & (df['Course_ID'] == cid)]
         if rows.empty:
             return jsonify({"error": f"Course {cid} not found in {campus}"}), 404
@@ -224,15 +203,13 @@ def search():
             "similarity": {}
         }
         
-        # 2. 生成图 (✨ 调用懒加载函数)
-        current_graph = get_campus_graph(campus) # 这里才会占用内存
+        current_graph = get_campus_graph(campus)
         
         if cid in current_graph:
             anc = nx.ancestors(current_graph, cid)
             sub = current_graph.subgraph(anc.union({cid}))
             resp['graph'] = create_plotly_json(sub, f"Tree: {cid}", cid)
             
-        # 3. 计算相似度
         if embeddings is not None:
             target_emb = embeddings[target_idx].unsqueeze(0)
             sim_res = {}
