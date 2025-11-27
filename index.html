@@ -1,44 +1,101 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>UCD Course Visualizer</title>
+    <title>UC Course Matcher</title>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        #search-container { margin-bottom: 20px; text-align: center; }
-        #course-input { padding: 10px; width: 200px; font-size: 16px; }
-        #search-btn { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-        #chart-div { width: 100%; height: 800px; border: 1px solid #ddd; }
-        #loading { display: none; color: #666; text-align: center; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background-color: #f9f9f9; }
+        
+        /* 搜索栏样式 */
+        #search-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px; }
+        select, input { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+
+        /* 布局容器 */
+        .grid-container { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        
+        /* 卡片样式 */
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h3 { margin-top: 0; color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+
+        /* 表格样式 */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+        th { background-color: #f4f4f4; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .score-badge { float: right; font-size: 0.8em; color: #666; background: #eee; padding: 2px 5px; border-radius: 3px; }
+
+        /* Prereq 文本 */
+        #prereq-text { font-family: monospace; background: #f4f4f4; padding: 15px; border-radius: 4px; border-left: 4px solid #007bff; }
+
+        #chart-div { width: 100%; height: 600px; }
+        #loading { display: none; text-align: center; font-size: 1.2em; color: #666; margin: 20px 0; }
     </style>
 </head>
 <body>
 
     <div id="search-container">
-        <h2>UCD Prerequisite Tree</h2>
-        <input type="text" id="course-input" placeholder="Enter Course ID (e.g. EAE126)" value="EAE126">
-        <button id="search-btn" onclick="loadGraph()">Search</button>
-        <p id="loading">Loading...</p>
+        <label>Campus:</label>
+        <select id="campus-select">
+            <option value="UCD" selected>UCD (Davis)</option>
+            <option value="UCLA">UCLA (Los Angeles)</option>
+            <option value="UCSC">UCSC (Santa Cruz)</option>
+            <option value="UCI">UCI (Irvine)</option>
+        </select>
+        
+        <input type="text" id="course-input" placeholder="Course ID (e.g. EAE126)" value="EAE126">
+        <button onclick="performSearch()">Search</button>
     </div>
 
-    <div id="chart-div"></div>
+    <div id="loading">⏳ Searching and calculating similarity...</div>
+
+    <div class="grid-container" id="results-area" style="display:none;">
+        
+        <div class="card">
+            <h3 id="table-title">Similar Courses</h3>
+            <table id="sim-table">
+                <thead>
+                    <tr>
+                        <th>UCD</th>
+                        <th>UCLA</th>
+                        <th>UCSC</th>
+                        <th>UCI</th>
+                    </tr>
+                </thead>
+                <tbody id="sim-table-body">
+                    </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Prerequisite List</h3>
+            <div id="prereq-text"></div>
+        </div>
+
+        <div class="card">
+            <h3>Prerequisite Graph (Interactive)</h3>
+            <div id="chart-div"></div>
+        </div>
+
+    </div>
 
     <script>
-        // ⚠️ 替换成你 Render 部署后的真实 URL
-        const API_BASE_URL = "https://sta160web.onrender.com/api/graph";
+        // ⚠️ 记得替换成你的 Render URL
+        const API_BASE_URL = "https://your-render-url.onrender.com/api/search";
 
-        async function loadGraph(courseId = null) {
-            // 获取输入框的值
-            if (!courseId) {
-                courseId = document.getElementById('course-input').value;
-            }
-            
-            // 显示 Loading
+        async function performSearch(overrideCourseId = null) {
+            const campus = document.getElementById('campus-select').value;
+            const courseId = overrideCourseId || document.getElementById('course-input').value;
+
+            // UI Reset
             document.getElementById('loading').style.display = 'block';
+            document.getElementById('results-area').style.display = 'none';
 
             try {
-                // 1. 请求后端 API
-                const response = await fetch(`${API_BASE_URL}/${courseId}`);
+                // 请求 API
+                const url = `${API_BASE_URL}?campus=${campus}&course_id=${courseId}`;
+                const response = await fetch(url);
                 const data = await response.json();
 
                 if (data.error) {
@@ -46,41 +103,73 @@
                     return;
                 }
 
-                // 2. 渲染 Plotly 图表
-                // data 就是后端返回的 fig.to_json() 的内容
-                Plotly.newPlot('chart-div', data.data, data.layout, {responsive: true});
+                // --- 渲染 1: 更新标题和 Prereq 文本 ---
+                document.getElementById('table-title').innerText = `Similar Courses for ${campus} ${courseId}`;
+                document.getElementById('prereq-text').innerText = data.prereq_list;
 
-                // 3. 绑定点击事件 (实现交互)
-                const chartDiv = document.getElementById('chart-div');
-                
-                chartDiv.on('plotly_click', function(data){
-                    // 获取点击点的 customdata (我们在后端存的 Course ID)
-                    if (data.points.length > 0) {
-                        const clickedId = data.points[0].customdata;
-                        console.log("Clicked:", clickedId);
-                        
-                        // 更新输入框
-                        document.getElementById('course-input').value = clickedId;
-                        
-                        // 重新加载图表 (递归交互)
-                        loadGraph(clickedId);
-                    }
-                });
+                // --- 渲染 2: 相似度表格 ---
+                renderSimilarityTable(data.similarity, campus);
+
+                // --- 渲染 3: 图表 ---
+                if (data.graph) {
+                    Plotly.newPlot('chart-div', data.graph.data, data.graph.layout, {responsive: true});
+                    
+                    // 绑定点击事件 (递归搜索)
+                    const chartDiv = document.getElementById('chart-div');
+                    chartDiv.removeAllListeners('plotly_click'); // 防止重复绑定
+                    chartDiv.on('plotly_click', function(eventData){
+                        if (eventData.points.length > 0) {
+                            const clickedId = eventData.points[0].customdata;
+                            // 保持 Campus 不变，搜索点击的课程
+                            document.getElementById('course-input').value = clickedId;
+                            performSearch(clickedId);
+                        }
+                    });
+                } else {
+                    document.getElementById('chart-div').innerText = "No graph data available (Isolated course).";
+                }
+
+                // 显示结果区
+                document.getElementById('results-area').style.display = 'grid';
 
             } catch (error) {
-                console.error("Error:", error);
-                alert("Failed to load graph. Is the backend running?");
+                console.error(error);
+                alert("Search failed. Please check console.");
             } finally {
                 document.getElementById('loading').style.display = 'none';
             }
         }
 
-        // 页面加载时默认查一门课
-        window.onload = function() {
-            loadGraph('EAE126');
+        function renderSimilarityTable(simData, currentCampus) {
+            const tbody = document.getElementById('sim-table-body');
+            tbody.innerHTML = ""; // 清空
+
+            const campuses = ['UCD', 'UCLA', 'UCSC', 'UCI'];
+            
+            // 我们总是展示 5 行
+            for (let i = 0; i < 5; i++) {
+                const tr = document.createElement('tr');
+                
+                campuses.forEach(campus => {
+                    const td = document.createElement('td');
+                    
+                    // 如果是本校，或者是该校没有数据
+                    if (campus === currentCampus || !simData[campus] || !simData[campus][i]) {
+                        td.innerText = "-";
+                        td.style.color = "#ccc";
+                    } else {
+                        const item = simData[campus][i];
+                        td.innerHTML = `
+                            <strong>${item.code}</strong><br>
+                            <span style="font-size:0.9em">${item.title}</span>
+                            <div class="score-badge">${(item.score * 100).toFixed(1)}%</div>
+                        `;
+                    }
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            }
         }
     </script>
 </body>
 </html>
-
-
