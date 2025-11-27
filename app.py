@@ -6,52 +6,49 @@ import re
 import plotly.graph_objects as go
 import json
 import plotly.utils
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util # 我们只需要 util，不需要加载模型
 import torch
-import numpy as np
+import os
 
 # 初始化 Flask
 app = Flask(__name__)
 CORS(app)
 
 # ==========================================
-# 1. 全局数据加载与处理
+# 1. 全局数据加载
 # ==========================================
 print("💡 正在初始化服务器...")
 
-# 1.1 读取数据
+# 1.1 读取 CSV
 try:
     df = pd.read_csv('combined_CLEAN.csv')
-    # 确保 Campus 列存在且干净
     df['Campus'] = df['Campus'].str.upper().str.strip()
 except Exception as e:
     print(f"Error loading CSV: {e}")
     df = pd.DataFrame()
 
-# 1.2 文本清洗与 Course ID 生成
+# 1.2 读取预计算的 Embeddings (✨ 关键修改)
+print("⏳ 正在加载预计算的 Embeddings...")
+embeddings = None
+try:
+    if os.path.exists('course_embeddings.pt'):
+        # map_location='cpu' 确保在 Render 这种无 GPU 环境下也能加载
+        embeddings = torch.load('course_embeddings.pt', map_location=torch.device('cpu'))
+        print(f"✅ Embeddings 加载成功! Shape: {embeddings.shape}")
+    else:
+        print("❌ 警告: 找不到 'course_embeddings.pt' 文件。相似度搜索将不可用。")
+except Exception as e:
+    print(f"❌ 加载 Embeddings 失败: {e}")
+
+# 1.3 Course ID 处理
 def normalize_course_id(text):
     if pd.isna(text): return ""
     return str(text).replace(" ", "").upper()
 
-def clean_text(text):
-    if pd.isna(text): return ""
-    text = str(text).lower()
-    noise_phrases = ["consent of instructor", "upper division standing", "pass/no pass"]
-    for phrase in noise_phrases:
-        text = text.replace(phrase, "")
-    return text
-
 if not df.empty:
     df['Course_ID'] = (df['Subject_Code'].fillna('') + df['Course_Code'].fillna('').astype(str)).apply(normalize_course_id)
-    
-    # 准备用于 Embedding 的文本
-    df["processed_text"] = (
-        "Course Title: " + df["Title"].fillna("") + ". " +
-        df["Title"].fillna("") + ". " +
-        "Description: " + df["Course Description"].apply(clean_text)
-    )
 
-# 1.3 预解析 Prerequisite 用于图构建
+# 1.4 解析 Prerequisite 用于图构建
 def parse_prerequisite(prereq_text):
     if not isinstance(prereq_text, str) or not prereq_text.strip():
         return []
@@ -76,33 +73,9 @@ def parse_prerequisite(prereq_text):
 if not df.empty:
     df['Prereq_Struct'] = df['Prerequisite(s)'].apply(parse_prerequisite)
 
-# 1.4 模型加载与 Embedding 计算 (针对 Render 优化)
-# ⚠️ 注意: Render 免费版内存有限，这里使用轻量级模型 'all-MiniLM-L6-v2'
-# 如果内存依然溢出，建议在本地计算好 embeddings 保存为 .npy 文件上传读取
-print("⏳ 正在加载 NLP 模型...")
-device = "cpu" # 服务器通常没有 GPU
-model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
-
-print("⏳ 正在计算 Embedding (这可能需要几十秒)...")
-if not df.empty:
-    embeddings = model.encode(
-        df["processed_text"].tolist(),
-        batch_size=64,
-        show_progress_bar=True,
-        convert_to_tensor=True,
-        normalize_embeddings=True
-    )
-else:
-    embeddings = None
-
-print("✅ 初始化完成。")
-
 # ==========================================
-# 2. 图构建逻辑 (按学校动态构建)
+# 2. 图构建逻辑 (缓存机制)
 # ==========================================
-# 为了支持多学校，我们需要根据请求动态构建图，或者缓存每个学校的图
-# 这里采用动态构建子图的方式，因为只需查询特定课程的依赖
-
 def build_prereq_graph_for_campus(campus_df):
     G = nx.DiGraph()
     for _, row in campus_df.iterrows():
@@ -126,17 +99,18 @@ def build_prereq_graph_for_campus(campus_df):
                     G.add_edge(source, or_node_id)
     return G
 
-# 缓存图对象以提升性能
 graphs = {}
+print("⏳ 正在构建图结构...")
 for campus in ['UCD', 'UCLA', 'UCSC', 'UCI']:
     campus_data = df[df['Campus'] == campus]
     if not campus_data.empty:
         graphs[campus] = build_prereq_graph_for_campus(campus_data)
     else:
         graphs[campus] = nx.DiGraph()
+print("✅ 服务器初始化全部完成。")
 
 # ==========================================
-# 3. 布局与绘图逻辑 (保持之前的优化版)
+# 3. 布局与绘图逻辑 (保持不变)
 # ==========================================
 def get_optimized_tree_layout(graph, root_node):
     pos = {}
@@ -242,49 +216,35 @@ def create_plotly_json(graph_obj, plot_title, highlight_node_id):
     return json.loads(json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder))
 
 # ==========================================
-# 4. API 路由接口 (核心业务逻辑)
+# 4. API 路由
 # ==========================================
-
 @app.route('/')
 def home():
-    return "UC Course API is Running!"
+    return "UCD Course API (Optimized) is Running!"
 
 @app.route('/api/search', methods=['GET'])
 def search_course():
-    """
-    参数:
-        campus: 学校代码 (UCD, UCLA, UCSC, UCI)
-        course_id: 课程代码 (e.g. EAE126)
-    返回:
-        JSON: {
-            "graph": Plotly JSON,
-            "prereq_list": "String description",
-            "similarity": { "UCD": [], "UCLA": [], ... }
-        }
-    """
     campus = request.args.get('campus', 'UCD').upper()
     course_id = normalize_course_id(request.args.get('course_id', ''))
     
     if not course_id:
         return jsonify({"error": "Please provide a Course ID"}), 400
 
-    # 1. 在指定 Campus 找到目标课程
-    # 使用原始 df 查找行
     target_rows = df[(df['Campus'] == campus) & (df['Course_ID'] == course_id)]
     
     if target_rows.empty:
         return jsonify({"error": f"Course {course_id} not found in {campus}"}), 404
     
     target_row = target_rows.iloc[0]
-    target_idx = target_rows.index[0] # 全局索引
+    target_idx = target_rows.index[0] 
     
     response_data = {}
 
-    # --- 2. 获取 Prerequisite List (Raw Text) ---
+    # Prereq Text
     raw_prereq = target_row['Prerequisite(s)']
     response_data['prereq_list'] = raw_prereq if pd.notna(raw_prereq) else "No prerequisites listed."
 
-    # --- 3. 生成 Graph (可视化) ---
+    # Graph
     G_campus = graphs.get(campus)
     if G_campus and course_id in G_campus:
         ancestors = nx.ancestors(G_campus, course_id)
@@ -292,43 +252,39 @@ def search_course():
         sub_G = G_campus.subgraph(nodes_of_interest)
         response_data['graph'] = create_plotly_json(sub_G, "", course_id)
     else:
-        response_data['graph'] = None # 可能是孤立点或没找到
+        response_data['graph'] = None
 
-    # --- 4. 计算相似度 (Similarity Table) ---
-    # 目标 Embedding
-    target_emb = embeddings[target_idx].unsqueeze(0) # Shape (1, 384)
-    
-    similarity_results = {}
-    target_campuses = ['UCD', 'UCLA', 'UCSC', 'UCI']
-    
-    for target_campus in target_campuses:
-        similarity_results[target_campus] = [] # 初始化空列表
+    # Similarity Calculation (优化版：直接使用 tensor 计算，不调用 model.encode)
+    if embeddings is not None:
+        target_emb = embeddings[target_idx].unsqueeze(0) 
         
-        # 如果是本校，不仅不计算，还要显式留空 (根据需求)
-        if target_campus == campus:
-            continue
+        similarity_results = {}
+        target_campuses = ['UCD', 'UCLA', 'UCSC', 'UCI']
+        
+        for target_campus in target_campuses:
+            similarity_results[target_campus] = []
+            if target_campus == campus: continue
+                
+            campus_mask = (df['Campus'] == target_campus)
+            if not campus_mask.any(): continue
             
-        # 筛选目标学校的数据
-        campus_mask = (df['Campus'] == target_campus)
-        if not campus_mask.any(): continue
-        
-        campus_embeddings = embeddings[campus_mask]
-        campus_indices = df[campus_mask].index
-        
-        # 计算相似度
-        hits = util.semantic_search(target_emb, campus_embeddings, top_k=5)
-        
-        # 整理 Top 5
-        top_hits = hits[0] # 只有1个query
-        for hit in top_hits:
-            global_idx = campus_indices[hit['corpus_id']] # 还原回原始 df 的 index
-            similarity_results[target_campus].append({
-                "code": df.loc[global_idx, 'Course_ID'],
-                "title": df.loc[global_idx, 'Title'],
-                "score": round(hit['score'], 3)
-            })
+            campus_embeddings = embeddings[campus_mask]
+            campus_indices = df[campus_mask].index
             
-    response_data['similarity'] = similarity_results
+            # 使用 util.semantic_search (纯数学计算，极快)
+            hits = util.semantic_search(target_emb, campus_embeddings, top_k=5)
+            
+            top_hits = hits[0]
+            for hit in top_hits:
+                global_idx = campus_indices[hit['corpus_id']]
+                similarity_results[target_campus].append({
+                    "code": df.loc[global_idx, 'Course_ID'],
+                    "title": df.loc[global_idx, 'Title'],
+                    "score": round(hit['score'], 3)
+                })
+        response_data['similarity'] = similarity_results
+    else:
+        response_data['similarity'] = {}
 
     return jsonify(response_data)
 
