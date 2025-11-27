@@ -172,9 +172,11 @@ def create_plotly_json(G, title, highlight):
 
 # 6. API
 @app.route('/')
-def home(): return "API OK"
+def home():
+    # 改一下这里，方便确认版本
+    return "API v2.0 (Search Endpoint) is Running!"
 
-@app.route('/api/search')
+@app.route('/api/search', methods=['GET']) # <--- 关键是这里，旧代码没有这一行
 def search():
     try:
         campus = request.args.get('campus', 'UCD').upper()
