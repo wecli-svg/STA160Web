@@ -48,7 +48,7 @@
         <button onclick="performSearch()">Search</button>
     </div>
 
-    <div id="loading">⏳ Searching and calculating similarity...</div>
+    <div id="loading">Searching and calculating similarity...</div>
 
     <div class="grid-container" id="results-area" style="display:none;">
         
@@ -81,14 +81,7 @@
     </div>
 
     <script>
-        // ⚠️ 记得替换成你的 Render URL
-        // index.html 的 <script> 标签内
 
-        // ❌ 删除旧的 Render 地址
-        // const API_BASE_URL = "https://sta160web.onrender.com/api/search";
-        
-        // ✅ 替换为 Hugging Face 的地址
-        // 注意：不要忘记在 Direct URL 后面加上 /api/search
         const API_BASE_URL = "https://wecli-course-api.hf.space/api/search";
 
         async function performSearch(overrideCourseId = null) {
@@ -100,7 +93,6 @@
             document.getElementById('results-area').style.display = 'none';
 
             try {
-                // 请求 API
                 const url = `${API_BASE_URL}?campus=${campus}&course_id=${courseId}`;
                 const response = await fetch(url);
                 const data = await response.json();
@@ -110,26 +102,20 @@
                     return;
                 }
 
-                // --- 渲染 1: 更新标题和 Prereq 文本 ---
                 document.getElementById('table-title').innerText = `Similar Courses for ${campus} ${courseId}`;
                 document.getElementById('prereq-text').innerText = data.prereq_list;
 
-                // --- 渲染 2: 相似度表格 ---
                 renderSimilarityTable(data.similarity, campus);
 
-                // --- 渲染 3: 图表 ---
                 if (data.graph) {
                     Plotly.newPlot('chart-div', data.graph.data, data.graph.layout, {responsive: true});
                     
-                    // 绑定点击事件 (递归搜索)
                     const chartDiv = document.getElementById('chart-div');
                     
-                    // 🔥 【已删除】 chartDiv.removeAllListeners('plotly_click'); 
                     
                     chartDiv.on('plotly_click', function(eventData){
                         if (eventData.points.length > 0) {
                             const clickedId = eventData.points[0].customdata;
-                            // 保持 Campus 不变，搜索点击的课程
                             document.getElementById('course-input').value = clickedId;
                             performSearch(clickedId);
                         }
@@ -138,7 +124,6 @@
                     document.getElementById('chart-div').innerText = "No graph data available (Isolated course).";
                 }
 
-                // 显示结果区
                 document.getElementById('results-area').style.display = 'grid';
 
             } catch (error) {
@@ -151,18 +136,16 @@
 
         function renderSimilarityTable(simData, currentCampus) {
             const tbody = document.getElementById('sim-table-body');
-            tbody.innerHTML = ""; // 清空
+            tbody.innerHTML = "";
 
             const campuses = ['UCD', 'UCLA', 'UCSC', 'UCI'];
             
-            // 我们总是展示 5 行
             for (let i = 0; i < 5; i++) {
                 const tr = document.createElement('tr');
                 
                 campuses.forEach(campus => {
                     const td = document.createElement('td');
                     
-                    // 如果是本校，或者是该校没有数据
                     if (campus === currentCampus || !simData[campus] || !simData[campus][i]) {
                         td.innerText = "-";
                         td.style.color = "#ccc";
@@ -182,6 +165,7 @@
     </script>
 </body>
 </html>
+
 
 
 
