@@ -82,7 +82,14 @@
 
     <script>
         // ⚠️ 记得替换成你的 Render URL
-        const API_BASE_URL = "https://sta160web.onrender.com/api/search";
+        // index.html 的 <script> 标签内
+
+        // ❌ 删除旧的 Render 地址
+        // const API_BASE_URL = "https://sta160web.onrender.com/api/search";
+        
+        // ✅ 替换为 Hugging Face 的地址
+        // 注意：不要忘记在 Direct URL 后面加上 /api/search
+        const API_BASE_URL = "https://wecli-course-api.hf.space/api/search";
 
         async function performSearch(overrideCourseId = null) {
             const campus = document.getElementById('campus-select').value;
@@ -175,6 +182,7 @@
     </script>
 </body>
 </html>
+
 
 
 
