@@ -10,7 +10,7 @@ from sentence_transformers import util
 import torch
 import os
 import traceback
-import gc # 引入垃圾回收
+import gc
 
 app = Flask(__name__)
 CORS(app)
@@ -20,9 +20,7 @@ try:
     cols_to_keep = ['Campus', 'Subject_Code', 'Course_Code', 'Title', 'Prerequisite(s)']
     df = pd.read_csv('combined_CLEAN.csv', usecols=lambda c: c in cols_to_keep or c == 'Course Description')
     df['Campus'] = df['Campus'].str.upper().str.strip()
-    print(f"CSV 加载成功，共 {len(df)} 行")
 except Exception as e:
-    print(f"CSV 加载失败: {e}")
     df = pd.DataFrame()
 
 embeddings = None
@@ -32,7 +30,7 @@ try:
         embeddings = torch.load('course_embeddings.pt', map_location=torch.device('cpu'))
         print(f"Loading Embeddings sucess! Shape: {embeddings.shape}")
     else:
-        print("Not found embeddings 文件")
+        print("Not found embeddings")
 except Exception as e:
     print(f"Embeddings loading error: {e}")
 
@@ -68,11 +66,9 @@ graphs = {}
 
 def get_campus_graph(campus_name):
 
-    # 如果已经构建过，直接返回
     if campus_name in graphs:
         return graphs[campus_name]
     
-    print(f"首次请求 {campus_name}，正在构建图索引")
     campus_df = df[df['Campus'] == campus_name]
     
     if campus_df.empty:
@@ -99,7 +95,6 @@ def get_campus_graph(campus_name):
                         G.add_edge(src, or_id)
     
     graphs[campus_name] = G
-    print(f"{campus_name} 图构建完成。")
     return G
 
 def get_optimized_tree_layout(graph, root_node):
@@ -176,7 +171,6 @@ def create_plotly_json(G, title, highlight):
         ))
         return json.loads(json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder))
     except Exception as e:
-        print(f"绘图错误: {e}")
         return None
 
 
