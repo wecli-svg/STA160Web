@@ -364,7 +364,6 @@
   </main>
 
   <script>
-    // ⚠️ 记得确保这个 URL 是正确的
     const API_BASE_URL = "https://wecli-course-api.hf.space/api/search";
 
     const elCampus = document.getElementById('campus-select');
@@ -387,9 +386,8 @@
 
     elCourse.addEventListener('keydown', (e) => { if(e.key === 'Enter') btnSearch.click(); });
 
-    // ✨ 拖动滑块结束后自动搜索
     elDepth.addEventListener('change', () => {
-        performSearch(); // 重新加载图表
+        performSearch(); 
     });
 
     btnReset.addEventListener('click', () => {
@@ -416,10 +414,9 @@
 
       setLoading(true);
       elResults.style.display = 'grid';
-      elDepthDisplay.innerText = depth; // 更新图表右上角的文字
+      elDepthDisplay.innerText = depth;
 
       try {
-        // ✨ 将 depth 参数传给后端
         const url = `${API_BASE_URL}?campus=${encodeURIComponent(campus)}&course_id=${encodeURIComponent(courseId)}&depth=${depth}`;
         
         const resp = await fetch(url);
@@ -437,18 +434,15 @@
         renderSimilarityTable(data.similarity || {}, campus);
 
         if(data.graph && data.graph.data){
-          // 重绘图表
           Plotly.react(chartDiv, data.graph.data, data.graph.layout, {responsive:true});
 
-          // 绑定点击事件
-          chartDiv.removeAllListeners && chartDiv.removeAllListeners('plotly_click'); // 防御性移除
+          chartDiv.removeAllListeners && chartDiv.removeAllListeners('plotly_click'); 
           chartDiv.on('plotly_click', function(eventData){
             try{
               if(eventData && eventData.points && eventData.points.length){
                 const clickedId = eventData.points[0].customdata;
                 if(clickedId && typeof clickedId === 'string'){
                   elCourse.value = clickedId;
-                  // 保持当前 depth 设置，递归搜索
                   performSearch(clickedId);
                 }
               }
@@ -493,10 +487,10 @@
       }
     }
 
-    // 页面加载自动搜索一次
     window.addEventListener('load', ()=> {
       setTimeout(()=> performSearch(), 100);
     });
   </script>
 </body>
 </html>
+
