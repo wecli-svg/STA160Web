@@ -1,167 +1,502 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>UC Course Matcher</title>
-    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background-color: #f9f9f9; }
-        
-        /* 搜索栏样式 */
-        #search-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px; }
-        select, input { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UC Course Matcher — Interactive</title>
 
-        /* 布局容器 */
-        .grid-container { display: grid; grid-template-columns: 1fr; gap: 20px; }
-        
-        /* 卡片样式 */
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h3 { margin-top: 0; color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-        /* 表格样式 */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; vertical-align: top; }
-        th { background-color: #f4f4f4; font-weight: bold; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        .score-badge { float: right; font-size: 0.8em; color: #666; background: #eee; padding: 2px 5px; border-radius: 3px; }
+  <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
 
-        /* Prereq 文本 */
-        #prereq-text { font-family: monospace; background: #f4f4f4; padding: 15px; border-radius: 4px; border-left: 4px solid #007bff; }
+  <style>
+    :root{
+      --bg: #f4f6fb;
+      --bg-soft: #eef2ff;
+      --card: #ffffff;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-600: #1e4fcc;
+      --border-subtle: #e5e7eb;
+      --radius: 12px;
+      --shadow-sm: 0 4px 12px rgba(15,23,42,0.06);
+      --shadow-lg: 0 12px 32px rgba(15,23,42,0.10);
+      --max-width: 1200px;
+    }
 
-        #chart-div { width: 100%; height: 600px; }
-        #loading { display: none; text-align: center; font-size: 1.2em; color: #666; margin: 20px 0; }
-    </style>
+    * { box-sizing:border-box; }
+
+    html,body{
+      height:100%;
+      margin:0;
+      font-family:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(191,219,254,0.45), transparent 55%),
+        radial-gradient(circle at bottom right, rgba(219,234,254,0.60), transparent 55%),
+        var(--bg);
+      color:#0f172a;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      font-size:15px;
+    }
+
+    .page {
+      max-width: var(--max-width);
+      margin: 40px auto 32px;
+      padding: 0 24px;
+    }
+
+    .mt-18 { margin-top:18px; }
+    .text-center { text-align:center; }
+
+    /* Header/search area */
+    .search-card {
+      background: linear-gradient(135deg,#ffffff, #f9fafb);
+      padding: 18px 20px;
+      border-radius: 18px;
+      box-shadow: var(--shadow-sm);
+      display:flex;
+      gap:20px;
+      align-items:center;
+      margin-bottom:22px;
+      border:1px solid rgba(148,163,184,0.18);
+      backdrop-filter: blur(14px);
+      transition: transform .14s ease, box-shadow .14s ease;
+    }
+    .search-card:hover{
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .brand {
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width: 190px;
+    }
+    .brand .title { font-weight:700; font-size:1.15rem; letter-spacing:0.02em; }
+    .brand .subtitle { font-size:0.86rem; color:var(--muted); }
+
+    .search-controls {
+      display:flex;
+      gap:16px;
+      align-items:center;
+      flex:1;
+      flex-wrap: wrap; /* Allow wrapping on small screens */
+    }
+
+    .field {
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+    }
+    .field-label {
+      font-size:0.72rem;
+      text-transform:uppercase;
+      letter-spacing:0.08em;
+      color:var(--muted);
+      font-weight:500;
+    }
+
+    .input, .select {
+      padding:9px 12px;
+      border-radius:10px;
+      border:1px solid #e2e8f0;
+      font-size:0.96rem;
+      background:#ffffff;
+      outline: none;
+      transition:border-color .12s ease, box-shadow .12s ease;
+    }
+    .input:focus, .select:focus{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(37,99,235,0.1);
+    }
+
+    .input{ flex:1; min-width: 140px; }
+
+    /* Range Slider Styling */
+    .range-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f1f5f9;
+      padding: 5px 12px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      height: 42px; /* Match input height */
+    }
+    input[type=range] {
+      width: 100px;
+      cursor: pointer;
+    }
+    .range-val {
+      font-weight: 600;
+      color: var(--accent);
+      min-width: 14px;
+      text-align: center;
+    }
+
+    .btn {
+      border-radius: 999px;
+      font-weight:600;
+      cursor:pointer;
+      transition: background .12s ease, transform .08s ease, box-shadow .12s ease;
+      font-size:0.92rem;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:9px 16px;
+      border:1px solid transparent;
+      height: 40px;
+    }
+    .btn-primary{
+      background: var(--accent);
+      color:#ffffff;
+      box-shadow:0 6px 16px rgba(37,99,235,0.35);
+    }
+    .btn-primary:hover{
+      background: var(--accent-600);
+      transform: translateY(-1px);
+      box-shadow:0 10px 24px rgba(37,99,235,0.45);
+    }
+    .btn-secondary{
+      background:#ffffff;
+      color:#374151;
+      border-color:#d1d5db;
+    }
+    .btn-secondary:hover{
+      background:#f3f4f6;
+      transform: translateY(-1px);
+    }
+
+    /* Layout */
+    .page-grid {
+      display:grid;
+      grid-template-columns: minmax(0,1.2fr) minmax(360px,0.9fr);
+      gap: 24px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .page-grid { grid-template-columns: 1fr; }
+      .search-card{ flex-direction:column; align-items:flex-start; }
+      .search-controls{ width:100%; }
+    }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow-sm);
+      border:1px solid rgba(148,163,184,0.14);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+    }
+    .card-header {
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:10px;
+    }
+    .card-title {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin:0;
+      font-weight:600;
+      color:#0f172a;
+      font-size:1.08rem;
+    }
+    .card-sub {
+      color:var(--muted);
+      font-size:0.85rem;
+      margin-top:4px;
+    }
+
+    /* Table */
+    .sim-table { width:100%; border-collapse: collapse; font-size:0.94rem; }
+    .sim-table th, .sim-table td {
+      padding:9px 10px;
+      text-align:left;
+      vertical-align:top;
+      border-bottom:1px solid #f3f4f6;
+    }
+    .sim-table th {
+      background:#f9fafb;
+      color:#4b5563;
+      font-weight:600;
+      text-transform:uppercase;
+      font-size:0.75rem;
+    }
+    .sim-course strong { display:block; font-size:0.97rem; }
+    .sim-course .muted { color:var(--muted); font-size:0.86rem; margin-top:3px; display:block; }
+    .score-badge {
+      margin-left:auto;
+      background:#dbeafe;
+      color:#1d4ed8;
+      font-size:0.78rem;
+      padding:4px 8px;
+      border-radius:999px;
+      font-weight:600;
+    }
+
+    /* Graph */
+    .graph-wrap {
+      height: calc(100vh - 240px);
+      min-height: 420px;
+      max-height: 640px;
+      display:flex;
+      flex-direction:column;
+    }
+    #chart-div {
+      flex:1;
+      width:100%;
+      border-radius:14px;
+      overflow:hidden;
+      background:#f8fbff;
+    }
+
+    .loading {
+      display:none;
+      padding:10px 14px;
+      border-radius:12px;
+      background: #ffffff;
+      box-shadow: var(--shadow-sm);
+      text-align:center;
+      font-weight:500;
+      color:var(--muted);
+      margin:12px 0 18px;
+    }
+    .muted-note { color:var(--muted); font-size:0.86rem; }
+  </style>
 </head>
 <body>
+  <main class="page">
+    <header class="search-card">
+      <div class="brand">
+        <span class="title">UC Course Matcher</span>
+        <span class="subtitle">Find similar courses & prerequisite trees</span>
+      </div>
 
-    <div id="search-container">
-        <label>Campus:</label>
-        <select id="campus-select">
+      <div class="search-controls">
+        <div class="field">
+          <span class="field-label">Campus</span>
+          <select id="campus-select" class="select">
             <option value="UCD" selected>UCD (Davis)</option>
             <option value="UCLA">UCLA (Los Angeles)</option>
             <option value="UCSC">UCSC (Santa Cruz)</option>
             <option value="UCI">UCI (Irvine)</option>
-        </select>
-        
-        <input type="text" id="course-input" placeholder="Course ID (e.g. EAE126)" value="EAE126">
-        <button onclick="performSearch()">Search</button>
-    </div>
+          </select>
+        </div>
 
-    <div id="loading">Searching and calculating similarity...</div>
+        <div class="field" style="flex:1;">
+          <span class="field-label">Course ID</span>
+          <input id="course-input" class="input" type="text" placeholder="e.g. MAT022A" value="MAT022A">
+        </div>
 
-    <div class="grid-container" id="results-area" style="display:none;">
-        
-        <div class="card">
-            <h3 id="table-title">Similar Courses</h3>
-            <table id="sim-table">
-                <thead>
-                    <tr>
-                        <th>UCD</th>
-                        <th>UCLA</th>
-                        <th>UCSC</th>
-                        <th>UCI</th>
-                    </tr>
-                </thead>
-                <tbody id="sim-table-body">
-                    </tbody>
+        <div class="field">
+          <span class="field-label">Graph Depth</span>
+          <div class="range-wrap" title="Adjust prerequisite generation depth">
+            <input type="range" id="depth-slider" min="1" max="5" value="1" oninput="document.getElementById('depth-val').innerText = this.value">
+            <span id="depth-val" class="range-val">1</span>
+          </div>
+        </div>
+
+        <button id="search-btn" class="btn btn-primary">
+          <span>Search</span>
+        </button>
+
+        <button id="reset-btn" class="btn btn-secondary">
+          <span>Reset</span>
+        </button>
+      </div>
+    </header>
+
+    <div id="loading" class="loading">Searching and calculating similarity…</div>
+
+    <section class="page-grid" style="display:none;">
+      <div>
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2 id="sim-title" class="card-title">📚 Similar Courses</h2>
+              <p class="card-sub">Closest matches across other campuses</p>
+            </div>
+          </div>
+          <div style="overflow:auto;">
+            <table class="sim-table">
+              <thead>
+                <tr><th>UCD</th><th>UCLA</th><th>UCSC</th><th>UCI</th></tr>
+              </thead>
+              <tbody id="sim-table-body"></tbody>
             </table>
-        </div>
+          </div>
+        </section>
 
-        <div class="card">
-            <h3>Prerequisite List</h3>
-            <div id="prereq-text"></div>
-        </div>
+        <section class="card mt-18">
+          <div class="card-header">
+            <h2 class="card-title">🔗 Prerequisite List</h2>
+          </div>
+          <div id="prereq-text" style="background:#f9fafb; border-left:4px solid var(--accent); padding:12px; border-radius:10px; font-family:monospace; white-space:pre-wrap;">—</div>
+        </section>
+      </div>
 
-        <div class="card">
-            <h3>Prerequisite Graph (Interactive)</h3>
-            <div id="chart-div"></div>
-        </div>
+      <div>
+        <section class="card graph-wrap">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">📊 Prerequisite Graph</h2>
+              <p class="card-sub">Click nodes to navigate.</p>
+            </div>
+            <div class="text-right">
+              <div class="small muted-note">Showing <span id="depth-display">1</span> generation(s)</div>
+            </div>
+          </div>
+          <div id="chart-div"></div>
+        </section>
+      </div>
+    </section>
+  </main>
 
-    </div>
+  <script>
+    // ⚠️ 记得确保这个 URL 是正确的
+    const API_BASE_URL = "https://wecli-course-api.hf.space/api/search";
 
-    <script>
+    const elCampus = document.getElementById('campus-select');
+    const elCourse = document.getElementById('course-input');
+    const elDepth = document.getElementById('depth-slider');
+    const elDepthVal = document.getElementById('depth-val');
+    const elDepthDisplay = document.getElementById('depth-display');
+    const btnSearch = document.getElementById('search-btn');
+    const btnReset  = document.getElementById('reset-btn');
+    const elLoading = document.getElementById('loading');
+    const elResults = document.querySelector('.page-grid');
+    const elSimBody = document.getElementById('sim-table-body');
+    const elPrereq = document.getElementById('prereq-text');
+    const chartDiv = document.getElementById('chart-div');
 
-        const API_BASE_URL = "https://wecli-course-api.hf.space/api/search";
+    function setLoading(on){
+      elLoading.style.display = on ? 'block' : 'none';
+      if(on) window.scrollTo({ top:0, behavior:'smooth' });
+    }
 
-        async function performSearch(overrideCourseId = null) {
-            const campus = document.getElementById('campus-select').value;
-            const courseId = overrideCourseId || document.getElementById('course-input').value;
+    elCourse.addEventListener('keydown', (e) => { if(e.key === 'Enter') btnSearch.click(); });
 
-            // UI Reset
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('results-area').style.display = 'none';
+    // ✨ 拖动滑块结束后自动搜索
+    elDepth.addEventListener('change', () => {
+        performSearch(); // 重新加载图表
+    });
 
-            try {
-                const url = `${API_BASE_URL}?campus=${campus}&course_id=${courseId}`;
-                const response = await fetch(url);
-                const data = await response.json();
+    btnReset.addEventListener('click', () => {
+      elCourse.value = '';
+      elDepth.value = 1;
+      elDepthVal.innerText = '1';
+      elSimBody.innerHTML = '';
+      elPrereq.innerText = '—';
+      chartDiv.innerHTML = '';
+      elResults.style.display = 'none';
+    });
 
-                if (data.error) {
-                    alert(data.error);
-                    return;
+    btnSearch.addEventListener('click', () => performSearch());
+
+    async function performSearch(overrideCourseId = null) {
+      const campus = elCampus.value;
+      const courseId = (overrideCourseId || elCourse.value || '').trim();
+      const depth = elDepth.value; // 获取当前深度
+
+      if(!courseId) {
+        alert('Please enter a course id (e.g. MAT022A)');
+        return;
+      }
+
+      setLoading(true);
+      elResults.style.display = 'grid';
+      elDepthDisplay.innerText = depth; // 更新图表右上角的文字
+
+      try {
+        // ✨ 将 depth 参数传给后端
+        const url = `${API_BASE_URL}?campus=${encodeURIComponent(campus)}&course_id=${encodeURIComponent(courseId)}&depth=${depth}`;
+        
+        const resp = await fetch(url);
+        if(!resp.ok){
+          const body = await resp.json().catch(()=>({error:'Not found'}));
+          setLoading(false);
+          alert(body.error || 'Course not found');
+          return;
+        }
+        const data = await resp.json();
+
+        document.getElementById('sim-title').innerText = `📚 Similar Courses — ${campus} ${courseId}`;
+        elPrereq.innerText = data.prereq_list || 'None';
+
+        renderSimilarityTable(data.similarity || {}, campus);
+
+        if(data.graph && data.graph.data){
+          // 重绘图表
+          Plotly.react(chartDiv, data.graph.data, data.graph.layout, {responsive:true});
+
+          // 绑定点击事件
+          chartDiv.removeAllListeners && chartDiv.removeAllListeners('plotly_click'); // 防御性移除
+          chartDiv.on('plotly_click', function(eventData){
+            try{
+              if(eventData && eventData.points && eventData.points.length){
+                const clickedId = eventData.points[0].customdata;
+                if(clickedId && typeof clickedId === 'string'){
+                  elCourse.value = clickedId;
+                  // 保持当前 depth 设置，递归搜索
+                  performSearch(clickedId);
                 }
+              }
+            }catch(e){ console.warn(e); }
+          });
 
-                document.getElementById('table-title').innerText = `Similar Courses for ${campus} ${courseId}`;
-                document.getElementById('prereq-text').innerText = data.prereq_list;
-
-                renderSimilarityTable(data.similarity, campus);
-
-                if (data.graph) {
-                    Plotly.newPlot('chart-div', data.graph.data, data.graph.layout, {responsive: true});
-                    
-                    const chartDiv = document.getElementById('chart-div');
-                    
-                    
-                    chartDiv.on('plotly_click', function(eventData){
-                        if (eventData.points.length > 0) {
-                            const clickedId = eventData.points[0].customdata;
-                            document.getElementById('course-input').value = clickedId;
-                            performSearch(clickedId);
-                        }
-                    });
-                } else {
-                    document.getElementById('chart-div').innerText = "No graph data available (Isolated course).";
-                }
-
-                document.getElementById('results-area').style.display = 'grid';
-
-            } catch (error) {
-                console.error(error);
-                alert("Search failed. Please check console.");
-            } finally {
-                document.getElementById('loading').style.display = 'none';
-            }
+        } else {
+          chartDiv.innerHTML = '<div style="padding:18px;color:#6b7280">No graph data available.</div>';
         }
 
-        function renderSimilarityTable(simData, currentCampus) {
-            const tbody = document.getElementById('sim-table-body');
-            tbody.innerHTML = "";
+      } catch (err) {
+        console.error(err);
+        alert('Search failed. Backend might be waking up.');
+      } finally {
+        setLoading(false);
+      }
+    }
 
-            const campuses = ['UCD', 'UCLA', 'UCSC', 'UCI'];
-            
-            for (let i = 0; i < 5; i++) {
-                const tr = document.createElement('tr');
-                
-                campuses.forEach(campus => {
-                    const td = document.createElement('td');
-                    
-                    if (campus === currentCampus || !simData[campus] || !simData[campus][i]) {
-                        td.innerText = "-";
-                        td.style.color = "#ccc";
-                    } else {
-                        const item = simData[campus][i];
-                        td.innerHTML = `
-                            <strong>${item.code}</strong><br>
-                            <span style="font-size:0.9em">${item.title}</span>
-                            <div class="score-badge">${(item.score * 100).toFixed(1)}%</div>
-                        `;
-                    }
-                    tr.appendChild(td);
-                });
-                tbody.appendChild(tr);
-            }
-        }
-    </script>
+    function renderSimilarityTable(simData, currentCampus){
+      elSimBody.innerHTML = '';
+      const campuses = ['UCD','UCLA','UCSC','UCI'];
+      for(let i=0; i<5; i++){
+        const tr = document.createElement('tr');
+        campuses.forEach(c => {
+          const td = document.createElement('td');
+          if(c === currentCampus || !simData[c] || !simData[c][i]){
+            td.innerHTML = `<span style="color:#d1d5db">—</span>`;
+          } else {
+            const item = simData[c][i];
+            td.innerHTML = `
+              <div style="display:flex;gap:8px;">
+                <div>
+                  <strong>${item.code}</strong>
+                  <div style="color:#6b7280;font-size:0.86rem;margin-top:2px">${item.title}</div>
+                </div>
+                <div class="score-badge" style="margin-left:auto;">${(item.score*100).toFixed(1)}%</div>
+              </div>`;
+          }
+          tr.appendChild(td);
+        });
+        elSimBody.appendChild(tr);
+      }
+    }
+
+    // 页面加载自动搜索一次
+    window.addEventListener('load', ()=> {
+      setTimeout(()=> performSearch(), 100);
+    });
+  </script>
 </body>
 </html>
